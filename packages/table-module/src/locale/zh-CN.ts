@@ -13,5 +13,8 @@ export default {
     insertRow: '插入行',
     insertTable: '插入表格',
     header: '表头',
+    selectRow: '选中行',
+    selectCol: '选中列',
+    mergeCells: '合并单元格',
   },
 }

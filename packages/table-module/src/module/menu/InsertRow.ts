@@ -6,7 +6,24 @@
 import { Editor, Transforms, Range, Path } from 'slate'
 import { IButtonMenu, IDomEditor, DomEditor, t } from '@wangeditor/core'
 import { ADD_ROW_SVG } from '../../constants/svg'
-import { TableRowElement, TableCellElement } from '../custom-types'
+import { TableRowElement, TableCellElement, TableElement } from '../custom-types'
+
+function getMaxColumns(tableNode: TableElement): number {
+  const rows = tableNode.children || []
+  let maxCols = 0
+  for (const row of rows) {
+    const cells = row.children || []
+    let colCount = 0
+    for (const cell of cells) {
+      const cellElem = cell as TableCellElement
+      colCount += cellElem.colSpan || 1
+    }
+    if (colCount > maxCols) {
+      maxCols = colCount
+    }
+  }
+  return maxCols
+}
 
 class InsertRow implements IButtonMenu {
   readonly title = t('tableModule.insertRow')
@@ -39,18 +56,12 @@ class InsertRow implements IButtonMenu {
   exec(editor: IDomEditor, value: string | boolean) {
     if (this.isDisabled(editor)) return
 
-    const [cellEntry] = Editor.nodes(editor, {
-      match: n => DomEditor.checkNodeType(n, 'table-cell'),
-      universal: true,
-    })
-    const [cellNode, cellPath] = cellEntry
+    const tableNode = DomEditor.getSelectedNodeByType(editor, 'table')
+    if (tableNode == null) return
 
-    // 获取 cell length ，即多少列
-    const rowNode = DomEditor.getParentNode(editor, cellNode)
-    const cellsLength = rowNode?.children.length || 0
+    const cellsLength = getMaxColumns(tableNode as TableElement)
     if (cellsLength === 0) return
 
-    // 拼接新的 row
     const newRow: TableRowElement = { type: 'table-row', children: [] }
     for (let i = 0; i < cellsLength; i++) {
       const cell: TableCellElement = {
@@ -60,7 +71,12 @@ class InsertRow implements IButtonMenu {
       newRow.children.push(cell)
     }
 
-    // 插入 row
+    const [cellEntry] = Editor.nodes(editor, {
+      match: n => DomEditor.checkNodeType(n, 'table-cell'),
+      universal: true,
+    })
+    const [, cellPath] = cellEntry
+
     const rowPath = Path.parent(cellPath) // 获取 tr 的 path
     const newRowPath = Path.next(rowPath)
     Transforms.insertNodes(editor, newRow, { at: newRowPath })

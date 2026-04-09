@@ -39,11 +39,11 @@
     "test": "jest",
     "test-c": "jest --coverage",
     "example": "concurrently \"yarn dev-watch\" \"http-server -p 8881 -c-1\" ",
-    "dev": "cross-env NODE_ENV=development rollup -c rollup.config.js",
-    "dev-watch": "cross-env NODE_ENV=development rollup -c rollup.config.js -w",
-    "build": "cross-env NODE_ENV=production rollup -c rollup.config.js",
-    "dev-size-stats": "cross-env NODE_ENV=development:size_stats rollup -c rollup.config.js",
-    "size-stats": "cross-env NODE_ENV=production:size_stats rollup -c rollup.config.js"
+    "dev": "cross-env NODE_ENV=development rollup -c rollup.config.mjs",
+    "dev-watch": "cross-env NODE_ENV=development rollup -c rollup.config.mjs -w",
+    "build": "cross-env NODE_ENV=production rollup -c rollup.config.mjs",
+    "dev-size-stats": "cross-env NODE_ENV=development:size_stats rollup -c rollup.config.mjs",
+    "size-stats": "cross-env NODE_ENV=production:size_stats rollup -c rollup.config.mjs"
   },
   "bugs": {
     "url": "https://github.com/wangeditor-team/wangEditor/issues"

@@ -30,7 +30,10 @@ const COMMON_HOVERBAR_KEYS = {
       'deleteTableRow',
       'insertTableCol',
       'deleteTableCol',
+      'selectTableRow',
+      // 'selectTableCol',
       'deleteTable',
+      'mergeTableCells',
     ],
   },
   divider: {

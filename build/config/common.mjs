@@ -1,0 +1,53 @@
+/**
+ * @description rollup common config
+ * @author wangfupeng
+ */
+
+import path from 'path'
+import commonjs from '@rollup/plugin-commonjs'
+import json from '@rollup/plugin-json'
+import nodeResolve from '@rollup/plugin-node-resolve'
+import typescript from 'rollup-plugin-typescript2'
+import replace from '@rollup/plugin-replace'
+import peerDepsExternal from 'rollup-plugin-peer-deps-external'
+
+export const extensions = ['.js', '.jsx', '.ts', '.tsx']
+const isProd = process.env.NODE_ENV === 'production'
+
+const cwd = process.cwd()
+
+/**
+ * 生成 common conf
+ * @param {string} format 'umd' 'esm'
+ * @returns common conf
+ */
+function genCommonConf(format) {
+  return {
+    input: path.resolve(cwd, './src/index.ts'),
+    output: {},
+    plugins: [
+      peerDepsExternal(),
+      json({
+        compact: true,
+        indent: '  ',
+        preferConst: true,
+      }),
+      typescript({
+        clean: true,
+        tsconfig: path.resolve(cwd, './tsconfig.json'),
+      }),
+      nodeResolve({
+        browser: true,
+        mainFields: format === 'esm' ? ['module', 'main'] : ['main'],
+        extensions,
+      }),
+      commonjs(),
+      replace({
+        'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
+        preventAssignment: true,
+      }),
+    ],
+  }
+}
+
+export default genCommonConf

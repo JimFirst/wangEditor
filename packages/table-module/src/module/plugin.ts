@@ -17,8 +17,41 @@ import {
 } from 'slate'
 import { IDomEditor, DomEditor } from '@wangeditor/core'
 
+// 判断是否跨单元格选中
+function isCrossCellSelection(editor: IDomEditor): boolean {
+  const { selection } = editor
+  if (!selection || !selection.anchor || !selection.focus) return false
+
+  // 找到 anchor 所在的单元格
+  const [anchorCell] = Editor.nodes(editor, {
+    at: selection.anchor,
+    match: n => DomEditor.checkNodeType(n, 'table-cell'),
+  })
+
+  // 找到 focus 所在的单元格
+  const [focusCell] = Editor.nodes(editor, {
+    at: selection.focus,
+    match: n => DomEditor.checkNodeType(n, 'table-cell'),
+  })
+
+  // 如果两个单元格都存在且不是同一个，则是跨单元格选中
+  if (anchorCell && focusCell) {
+    const [, anchorPath] = anchorCell
+    const [, focusPath] = focusCell
+    const isCross = !Path.equals(anchorPath, focusPath)
+    return isCross
+  }
+
+  return false
+}
+
 // table cell 内部的删除处理
 function deleteHandler(newEditor: IDomEditor): boolean {
+  // 检查是否跨单元格选中
+  if (isCrossCellSelection(newEditor)) {
+    return true // 跨单元格选中，阻止删除操作
+  }
+
   const { selection } = newEditor
   if (selection == null) return false
 
@@ -66,13 +99,34 @@ function withTable<T extends IDomEditor>(editor: T): T {
     insertData,
     handleTab,
     selectAll,
+    insertText,
+    insertFragment,
+    deleteFragment,
   } = editor
   const newEditor = editor
+
+  // 重写 insertText - 文本插入
+  newEditor.insertText = (text: string) => {
+    const selectedNode = DomEditor.getSelectedNodeByType(newEditor, 'table')
+    if (selectedNode != null) {
+      // 检查是否跨单元格选中
+      if (isCrossCellSelection(newEditor)) {
+        return // 跨单元格选中，阻止文本插入
+      }
+    }
+
+    // 执行默认的文本插入
+    insertText(text)
+  }
 
   // 重写 insertBreak - cell 内换行，只换行文本，不拆分 node
   newEditor.insertBreak = () => {
     const selectedNode = DomEditor.getSelectedNodeByType(newEditor, 'table')
     if (selectedNode != null) {
+      // 检查是否跨单元格选中
+      if (isCrossCellSelection(newEditor)) {
+        return // 跨单元格选中，阻止换行操作
+      }
       // 选中了 table ，则在 cell 内换行
       newEditor.insertText('\n')
       return
@@ -171,6 +225,11 @@ function withTable<T extends IDomEditor>(editor: T): T {
       return
     }
 
+    // 检查是否跨单元格选中
+    if (isCrossCellSelection(newEditor)) {
+      return // 跨单元格选中，阻止粘贴操作
+    }
+
     // 获取文本，并插入到 cell
     const text = data.getData('text/plain')
 
@@ -219,6 +278,34 @@ function withTable<T extends IDomEditor>(editor: T): T {
       focus: end,
     }
     newEditor.select(newSelection) // 选中 table-cell 内部的全部文字
+  }
+
+  // 重写 insertFragment - 插入片段（如粘贴复杂内容）
+  newEditor.insertFragment = (fragment: Node[]) => {
+    const selectedNode = DomEditor.getSelectedNodeByType(newEditor, 'table')
+    if (selectedNode != null) {
+      // 检查是否跨单元格选中
+      if (isCrossCellSelection(newEditor)) {
+        return // 跨单元格选中，阻止插入操作
+      }
+    }
+
+    // 执行默认的插入操作
+    insertFragment(fragment)
+  }
+
+  // 重写 deleteFragment - 删除片段（如选中删除）
+  newEditor.deleteFragment = () => {
+    const selectedNode = DomEditor.getSelectedNodeByType(newEditor, 'table')
+    if (selectedNode != null) {
+      // 检查是否跨单元格选中
+      if (isCrossCellSelection(newEditor)) {
+        return // 跨单元格选中，阻止删除操作
+      }
+    }
+
+    // 执行默认的删除操作
+    deleteFragment()
   }
 
   // 可继续修改其他 newEditor API ...

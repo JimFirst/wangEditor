@@ -89,21 +89,25 @@ function createUploader(config: IUploadConfig): Uppy {
   uppy.on('upload-error', (file, error, response) => {
     try {
       // 有用户传入的第三方代码，得用 try catch 包裹
-      onError(file, error, response)
+      if (file) {
+        onError(file, error, response)
+        uppy.removeFile(file.id) // 清空文件
+      }
     } catch (err) {
       console.error('wangEditor upload file - onError error', err)
     }
-    uppy.removeFile(file.id) // 清空文件
   })
 
   uppy.on('restriction-failed', (file, error) => {
     try {
       // 有用户传入的第三方代码，得用 try catch 包裹
-      onError(file, error)
+      if (file) {
+        onError(file, error)
+        uppy.removeFile(file.id) // 清空文件
+      }
     } catch (err) {
       console.error('wangEditor upload file - onError error', err)
     }
-    uppy.removeFile(file.id) // 清空文件
   })
 
   // 返回实例

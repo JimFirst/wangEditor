@@ -11,6 +11,9 @@ import InsertCol from './InsertCol'
 import DeleteCol from './DeleteCol'
 import TableHander from './TableHeader'
 import FullWidth from './FullWidth'
+import SelectRow from './SelectRow'
+import SelectCol from './SelectCol'
+import MergeCells from './MergeCells'
 
 export const insertTableMenuConf = {
   key: 'insertTable',
@@ -65,5 +68,26 @@ export const tableFullWidthMenuConf = {
   key: 'tableFullWidth',
   factory() {
     return new FullWidth()
+  },
+}
+
+export const selectTableRowConf = {
+  key: 'selectTableRow',
+  factory() {
+    return new SelectRow()
+  },
+}
+
+export const selectTableColConf = {
+  key: 'selectTableCol',
+  factory() {
+    return new SelectCol()
+  },
+}
+
+export const mergeTableCellsConf = {
+  key: 'mergeTableCells',
+  factory() {
+    return new MergeCells()
   },
 }

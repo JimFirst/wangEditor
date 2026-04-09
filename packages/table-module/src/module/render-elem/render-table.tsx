@@ -31,11 +31,9 @@ function getContentEditable(editor: IDomEditor, tableElem: SlateElement): boolea
   const isFocusInTable =
     Point.compare(focus, tableEnd) <= 0 && Point.compare(focus, tableStart) >= 0
 
-  // 选区在 table 内部，且选中了同一个单元格。表格可以编辑
+  // 选区在able 内部，表格可以编辑（包括选中多个单元格的情况）
   if (isAnchorInTable && isFocusInTable) {
-    if (Path.equals(anchor.path.slice(0, 3), focus.path.slice(0, 3))) {
-      return true
-    }
+    return true
   }
 
   return false
@@ -44,8 +42,6 @@ function getContentEditable(editor: IDomEditor, tableElem: SlateElement): boolea
 function renderTable(elemNode: SlateElement, children: VNode[] | null, editor: IDomEditor): VNode {
   // 是否可编辑
   const editable = getContentEditable(editor, elemNode)
-
-  // 宽度
   const { width = 'auto' } = elemNode as TableElement
 
   // 是否选中

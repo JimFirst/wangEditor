@@ -17,9 +17,10 @@
     "moduleResolution": "node",
     "forceConsistentCasingInFileNames": true,
     "jsx": "react",
-    "jsxFactory": "jsx", /* snabbdom jsx */
+    "jsxFactory": "jsx",
     "downlevelIteration": true,
-    "allowJs": true
+    "allowJs": true,
+    "skipLibCheck": true
   },
   "exclude": [
     "node_modules",

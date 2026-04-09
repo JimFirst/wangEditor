@@ -13,5 +13,8 @@ export default {
     insertRow: 'Insert row',
     insertTable: 'Insert table',
     header: 'Header',
+    selectRow: 'Select row',
+    selectCol: 'Select column',
+    mergeCells: 'Merge cells',
   },
 }
