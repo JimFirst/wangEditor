@@ -16,5 +16,6 @@ export default {
     selectRow: '选中行',
     selectCol: '选中列',
     mergeCells: '合并单元格',
+    splitCells: '拆分单元格',
   },
 }

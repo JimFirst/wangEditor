@@ -14,6 +14,7 @@ import FullWidth from './FullWidth'
 import SelectRow from './SelectRow'
 import SelectCol from './SelectCol'
 import MergeCells from './MergeCells'
+import SplitCells from './SplitCells'
 
 export const insertTableMenuConf = {
   key: 'insertTable',
@@ -89,5 +90,12 @@ export const mergeTableCellsConf = {
   key: 'mergeTableCells',
   factory() {
     return new MergeCells()
+  },
+}
+
+export const splitTableCellsConf = {
+  key: 'splitTableCells',
+  factory() {
+    return new SplitCells()
   },
 }

@@ -16,5 +16,6 @@ export default {
     selectRow: 'Select row',
     selectCol: 'Select column',
     mergeCells: 'Merge cells',
+    splitCells: 'Split cells',
   },
 }

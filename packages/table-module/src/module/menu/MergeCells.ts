@@ -84,13 +84,18 @@ class MergeCells implements IButtonMenu {
     const firstCell = selectedCells[0] as TableCellElement
     const firstCellPath = DomEditor.findPath(editor, firstCell)
 
+    let totalColSpan = 0
+    for (const cell of selectedCells) {
+      const cellElem = cell as TableCellElement
+      totalColSpan += cellElem.colSpan || 1
+    }
+
     const cellPaths = selectedCells.map(cell => DomEditor.findPath(editor, cell))
     for (let i = cellPaths.length - 1; i > 0; i--) {
       Transforms.removeNodes(editor, { at: cellPaths[i] })
     }
 
-    const newColSpan = (firstCell.colSpan || 1) + selectedCells.length - 1
-    Transforms.setNodes(editor, { colSpan: newColSpan } as Partial<TableCellElement>, {
+    Transforms.setNodes(editor, { colSpan: totalColSpan } as Partial<TableCellElement>, {
       at: firstCellPath,
     })
   }

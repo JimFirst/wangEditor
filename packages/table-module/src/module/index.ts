@@ -21,6 +21,7 @@ import {
   selectTableRowConf,
   selectTableColConf,
   mergeTableCellsConf,
+  splitTableCellsConf,
 } from './menu/index'
 
 const table: Partial<IModuleConf> = {
@@ -40,6 +41,7 @@ const table: Partial<IModuleConf> = {
     selectTableRowConf,
     selectTableColConf,
     mergeTableCellsConf,
+    splitTableCellsConf,
   ],
   editorPlugin: withTable,
 }

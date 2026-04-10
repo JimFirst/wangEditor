@@ -34,6 +34,7 @@ const COMMON_HOVERBAR_KEYS = {
       // 'selectTableCol',
       'deleteTable',
       'mergeTableCells',
+      'splitTableCells',
     ],
   },
   divider: {
