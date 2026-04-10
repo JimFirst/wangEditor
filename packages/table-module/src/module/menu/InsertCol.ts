@@ -3,12 +3,11 @@
  * @author wangfupeng
  */
 
-import isEqual from 'lodash.isequal'
-import { Editor, Element, Transforms, Range, Node } from 'slate'
+import { Editor, Element, Transforms, Range } from 'slate'
 import { IButtonMenu, IDomEditor, DomEditor, t } from '@wangeditor/core'
 import { ADD_COL_SVG } from '../../constants/svg'
-import { TableCellElement, TableElement } from '../custom-types'
-import { isTableWithHeader } from '../helpers'
+import { TableCellElement, TableElement, TableRowElement } from '../custom-types'
+import { isTableWithHeader, getCellColIndex, getCellAtColIndex } from '../helpers'
 
 class InsertCol implements IButtonMenu {
   readonly title = t('tableModule.insertCol')
@@ -45,35 +44,43 @@ class InsertCol implements IButtonMenu {
       match: n => DomEditor.checkNodeType(n, 'table-cell'),
       universal: true,
     })
-    const [selectedCellNode, selectedCellPath] = cellEntry
+    const [selectedCellNode] = cellEntry
 
-    const rowNode = DomEditor.getParentNode(editor, selectedCellNode)
+    const rowNode = DomEditor.getParentNode(editor, selectedCellNode) as TableRowElement
     if (rowNode == null) return
     const tableNode = DomEditor.getParentNode(editor, rowNode) as TableElement
     if (tableNode == null) return
 
-    // 遍历所有 rows ，挨个添加 cell
+    const targetColIndex = getCellColIndex(selectedCellNode as TableCellElement, rowNode)
     const rows = tableNode.children || []
+
+    const insertPoints: { rowIndex: number; path: number[]; isHeaderRow: boolean }[] = []
+
     rows.forEach((row, rowIndex) => {
       if (!Element.isElement(row)) return
 
-      const cells = row.children || []
-      // 遍历一个 row 的所有 cells
-      cells.forEach((cell: Node) => {
-        const path = DomEditor.findPath(editor, cell)
-        if (
-          path.length === selectedCellPath.length &&
-          isEqual(path.slice(-1), selectedCellPath.slice(-1)) // 俩数组，最后一位相同
-        ) {
-          // 如果当前 td 的 path 和选中 td 的 path ，最后一位相同，说明是同一列
-          // 则在其后插入一个 cell
-          const newCell: TableCellElement = { type: 'table-cell', children: [{ text: '' }] }
-          if (rowIndex === 0 && isTableWithHeader(tableNode)) {
-            newCell.isHeader = true
-          }
-          Transforms.insertNodes(editor, newCell, { at: path })
-        }
+      const targetRow = row as TableRowElement
+      const cellInfo = getCellAtColIndex(targetRow, targetColIndex)
+
+      if (cellInfo == null) return
+
+      const cellPath = DomEditor.findPath(editor, cellInfo.cell)
+      insertPoints.push({
+        rowIndex,
+        path: cellPath,
+        isHeaderRow: rowIndex === 0 && isTableWithHeader(tableNode),
       })
+    })
+
+    insertPoints.reverse().forEach(point => {
+      const newCell: TableCellElement = {
+        type: 'table-cell',
+        children: [{ text: '' }],
+      }
+      if (point.isHeaderRow) {
+        newCell.isHeader = true
+      }
+      Transforms.insertNodes(editor, newCell, { at: point.path })
     })
   }
 }
