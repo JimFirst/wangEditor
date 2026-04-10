@@ -15,11 +15,31 @@ function parseCellHtml(
 ): TableCellElement {
   const $elem = $(elem)
 
-  children = children.filter(child => {
-    if (Text.isText(child)) return true
-    if (editor.isInline(child)) return true
-    return false
+  const newChildren: Descendant[] = []
+  children.forEach(child => {
+    if (Text.isText(child)) {
+      newChildren.push(child)
+      return
+    }
+    if (editor.isInline(child)) {
+      newChildren.push(child)
+      return
+    }
+
+    const childType = DomEditor.getNodeType(child)
+    if (childType === 'paragraph') {
+      const paragraphChildren = child.children || []
+      for (const pChild of paragraphChildren) {
+        if (Text.isText(pChild)) {
+          newChildren.push(pChild)
+        } else if (editor.isInline(pChild)) {
+          newChildren.push(pChild)
+        }
+      }
+      return
+    }
   })
+  children = newChildren
 
   // 无 children ，则用纯文本
   if (children.length === 0) {
