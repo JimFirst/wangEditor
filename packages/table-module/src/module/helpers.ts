@@ -116,6 +116,7 @@ export function getMaxVisualColumns(tableNode: TableElement): number {
  * - structure: 二维数组，记录每个位置对应的单元格（用于处理 rowspan/colspan 占位）
  * - rowspanCells: 所有有 rowspan 的单元格信息列表
  * - colspanCells: 所有有 colspan 的单元格信息列表
+ * - allCells: 所有单元格信息列表，包含 isPrimary（原单元格）和 isFilled（被填充单元格）标记
  * - maxColumns: 表格的最大列数
  * - maxRows: 表格的最大行数
  */
@@ -154,6 +155,7 @@ export function analyzeTableStructure(tableNode: TableElement) {
     rowspan: number
     colspan: number
     isPrimary: boolean
+    isFilled: boolean
   }> = []
 
   // 遍历表格的每一行
@@ -180,6 +182,7 @@ export function analyzeTableStructure(tableNode: TableElement) {
         rowspan,
         colspan,
         isPrimary: true,
+        isFilled: false,
       }
 
       allCells.push(cellInfo)
@@ -213,7 +216,22 @@ export function analyzeTableStructure(tableNode: TableElement) {
         for (let c = 0; c < colspan; c++) {
           if (r === 0 && c === 0) continue // 跳过自身位置
           if (rowIndex + r < maxRows && colIndex + c < maxColumns) {
-            structure[rowIndex + r][colIndex + c] = cellElem
+            const filledCell = {
+              ...cellElem,
+              isFilled: true,
+              originCell: cellElem,
+            } as TableCellElement
+            structure[rowIndex + r][colIndex + c] = filledCell
+
+            allCells.push({
+              cell: filledCell,
+              rowIndex: rowIndex + r,
+              colIndex: colIndex + c,
+              rowspan,
+              colspan,
+              isPrimary: false,
+              isFilled: true,
+            })
           }
         }
       }

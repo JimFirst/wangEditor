@@ -10,23 +10,50 @@ import { TableRowElement, TableCellElement, TableElement } from '../custom-types
 import { isTableWithHeader, analyzeTableStructure, getMaxVisualColumns } from '../helpers'
 
 /**
+ * 从 allCells 中查找原始单元格信息
+ * @param cell 单元格
+ * @param allCells 所有单元格列表
+ */
+function getOriginalCellInfo(
+  cell: TableCellElement,
+  allCells: Array<{
+    cell: TableCellElement
+    rowIndex: number
+    colIndex: number
+    rowspan: number
+    colspan: number
+    isPrimary: boolean
+    isFilled: boolean
+  }>
+) {
+  // 如果单元格有 originCell 属性，说明是被填充的单元格，需要通过 originCell 查找原始单元格
+  if (cell.isFilled && cell.originCell) {
+    return allCells.find(c => c.cell === cell.originCell && c.isPrimary === true)
+  }
+  // 否则直接查找 isPrimary === true 的单元格
+  return allCells.find(c => c.cell === cell && c.isPrimary === true)
+}
+
+/**
  * 检查当前列位置的单元格是否有 rowspan 跨越到插入位置
  * @param rowAbove 插入位置正上方的那一行单元格数组
  * @param colIndex 当前列索引
  * @param insertIndex 插入行的索引位置
- * @param rowspanCells 所有有 rowspan 的单元格列表
+ * @param allCells 所有有 rowspan 的单元格列表
  * @returns 如果存在跨越到插入位置的单元格，返回其信息；否则返回 null
  */
 function getSpanningCellFromRow(
   rowAbove: (TableCellElement | null)[],
   colIndex: number,
   insertIndex: number,
-  rowspanCells: Array<{
+  allCells: Array<{
     cell: TableCellElement
     rowIndex: number
     colIndex: number
     rowspan: number
     colspan: number
+    isPrimary: boolean
+    isFilled: boolean
   }>
 ): { cell: TableCellElement; rowspan: number; colspan: number; rowIndex: number } | null {
   // 当前列位置没有单元格
@@ -41,8 +68,8 @@ function getSpanningCellFromRow(
   // 如果 rowspan 为 1，不会跨越到其他行
   if (rowspan === 1) return null
 
-  // 从 rowspanCells 中查找该单元格的原始信息
-  const cellInfo = rowspanCells.find(c => c.cell === cell)
+  // 从 allCells 中查找该单元格的原始信息（isPrimary === true）
+  const cellInfo = getOriginalCellInfo(cell, allCells)
   if (!cellInfo) return null
 
   // 计算该单元格的结束行索引
@@ -131,10 +158,15 @@ function extendSpanningCells(
   insertRowIndex: number,
   tableInfo: ReturnType<typeof analyzeTableStructure>
 ) {
-  const { rowspanCells } = tableInfo
+  const { allCells } = tableInfo
 
-  for (const cellInfo of rowspanCells) {
+  // 只处理原始单元格（isPrimary === true）
+  const originalCells = allCells.filter(c => c.isPrimary === true)
+
+  for (const cellInfo of originalCells) {
     const { cell, rowIndex, rowspan } = cellInfo
+    if (rowspan <= 1) continue
+
     const endRowIndex = rowIndex + rowspan - 1
 
     // 如果单元格的起始行在插入位置之前，且结束行在插入位置或之后，则扩展其 rowSpan
@@ -151,7 +183,7 @@ function createNewRow(
   tableInfo: ReturnType<typeof analyzeTableStructure>,
   isHeaderRow: boolean
 ): TableRowElement {
-  const { structure, maxColumns, rowspanCells } = tableInfo
+  const { structure, maxColumns, allCells } = tableInfo
   // 获取插入位置正上方的那一行（因为新行会插入在该行之后）
   const rowAbove = structure[insertIndex - 1]
 
@@ -161,7 +193,7 @@ function createNewRow(
   // 遍历表格的每一列，为新行生成单元格
   while (colIndex < maxColumns) {
     // 检查当前列位置的单元格是否有 rowspan 跨越到插入位置
-    const spanningCell = getSpanningCellFromRow(rowAbove, colIndex, insertIndex, rowspanCells)
+    const spanningCell = getSpanningCellFromRow(rowAbove, colIndex, insertIndex, allCells)
 
     if (spanningCell) {
       const { rowIndex, rowspan } = spanningCell
