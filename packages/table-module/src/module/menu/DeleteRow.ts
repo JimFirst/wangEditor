@@ -1,6 +1,6 @@
 /**
- * @description del row menu
- * @author wangfupeng
+ * @description 删除表格行菜单
+ * @author dongmj
  */
 
 import { Editor, Transforms, Range, Path, Element as SlateElement } from 'slate'
@@ -47,6 +47,7 @@ class DeleteRow implements IButtonMenu {
   exec(editor: IDomEditor, value: string | boolean) {
     if (this.isDisabled(editor)) return
 
+    // 获取选中的表格行节点
     const [rowEntry] = Editor.nodes(editor, {
       match: n => DomEditor.checkNodeType(n, 'table-row'),
       universal: true,
@@ -57,6 +58,7 @@ class DeleteRow implements IButtonMenu {
     const tableNode = DomEditor.getParentNode(editor, rowNode)
     if (!tableNode) return
 
+    // 获取表格行数和目标行索引
     const rowsLength = tableNode.children.length
     const targetRowIndex = rowPath[rowPath.length - 1]
 
@@ -67,6 +69,7 @@ class DeleteRow implements IButtonMenu {
       return
     }
 
+    // 调用 removeRow 删除行
     this.removeRow(editor, rowPath, targetRowIndex, tableNode)
   }
 
@@ -78,13 +81,14 @@ class DeleteRow implements IButtonMenu {
    * 4. 清理可能产生的空列
    */
   private removeRow(editor: IDomEditor, rowPath: Path, targetRowIndex: number, tableNode: any) {
+    // 使用 withoutNormalizing 批量执行操作，避免中间状态引发不必要的 normalize
     Editor.withoutNormalizing(editor, () => {
       const tablePath = rowPath.slice(0, -1)
       const rows = tableNode.children
 
-      // 收集受影响的 rowspan 单元格（纵向合并）
+      // 收集受删除行影响的 rowspan 单元格（纵向合并的单元格）
       const affectedCells = this.collectAffectedRowspanCells(editor, tablePath, targetRowIndex)
-      // 收集受影响的 colspan 单元格（横向合并）
+      // 收集受删除行影响的 colspan 单元格（横向合并的单元格）
       const affectedColspanCells = this.collectAffectedColspanCells(
         editor,
         tablePath,
@@ -104,7 +108,7 @@ class DeleteRow implements IButtonMenu {
       // 删除目标行
       Transforms.removeNodes(editor, { at: rowPath })
 
-      // 清理空列
+      // 清理空列（删除行后可能产生空列）
       this.cleanupEmptyColumns(editor, tablePath, tableNode)
     })
   }
@@ -112,6 +116,7 @@ class DeleteRow implements IButtonMenu {
   /**
    * 收集受删除行影响的 rowspan 单元格
    * 遍历目标行及其之前的行，找出所有跨越目标行的单元格
+   * 因为这些单元格的 rowSpan 需要调整
    */
   private collectAffectedRowspanCells(editor: IDomEditor, tablePath: Path, targetRowIndex: number) {
     const [table] = Editor.node(editor, tablePath) as [TableElement, Path]
@@ -181,11 +186,16 @@ class DeleteRow implements IButtonMenu {
   }
 
   /**
-   * 处理rowspan单元格的删除影响
-   * 根据被删除行在rowspan中的位置，有三种情况：
-   * 1. 被删除的是起始行：调整rowspan值或拆分单元格
-   * 2. 被删除的在中间： rowspan - 1
-   * 3. 被删除的是结束行： rowspan - 1
+   * 处理 rowspan 单元格的删除影响
+   * 根据被删除行在 rowspan 中的位置，有三种情况：
+   * 1. 被删除的是起始行：调整 rowspan 值或拆分单元格
+   * 2. 被删除的在中间：rowspan - 1
+   * 3. 被删除的是结束行：rowspan - 1
+   *
+   * 例如：rowspan=4 的单元格占据 4 行（行号 0,1,2,3）
+   * - 删除行 0：变成起始行，内容下移，rowSpan 变为 3
+   * - 删除行 1 或 2：rowSpan 减 1
+   * - 删除行 3：rowSpan 减 1
    */
   private processRowspanCell(editor: IDomEditor, cellInfo: any, targetRowIndex: number) {
     const { cell, path, startRow, endRow, rowspan, colspan } = cellInfo
@@ -202,9 +212,10 @@ class DeleteRow implements IButtonMenu {
         }
       }
     }
-    // 情况2\3：处理一致
+    // 情况2/3：被删除的是中间行或结束行，处理一致
     else {
       Transforms.setNodes(editor, { rowSpan: rowspan - 1 }, { at: path })
+      // 如果 rowspan - 1 等于 1，删除 rowSpan 属性
       if (rowspan - 1 === 1) {
         Transforms.unsetNodes(editor, 'rowSpan', { at: path })
       }
@@ -233,6 +244,7 @@ class DeleteRow implements IButtonMenu {
   /**
    * 拆分只含有 colspan（不含 rowspan）的单元格
    * 将一个横向合并的单元格拆分为多个独立单元格
+   * 例如：colspan=3 的单元格拆分为 3 个单元格
    */
   private splitColspanCell(editor: IDomEditor, cellInfo: any) {
     const { cell, path, colspan, colIndex } = cellInfo
@@ -257,6 +269,7 @@ class DeleteRow implements IButtonMenu {
   /**
    * 拆分同时含有 colspan 和 rowspan 的单元格
    * 创建新的单元格网格来替代原来的合并单元格
+   * 例如：rowspan=3, colspan=2 的单元格拆分为 3x2 的单元格网格
    */
   private splitColspanRowspanCell(editor: IDomEditor, cellInfo: any, targetRowIndex: number) {
     const { cell, path, colspan, rowspan, colIndex } = cellInfo
@@ -308,6 +321,9 @@ class DeleteRow implements IButtonMenu {
   /**
    * 将起始行的 rowspan 单元格向下移动
    * 删除原单元格，在起始行创建新的 rowspan 减 1 的单元格
+   *
+   * 例如：原始单元格在行 0，rowspan=3，删除行 0 后
+   * 在行 1 创建新单元格，rowSpan=2
    */
   private moveRowspanCellDown(editor: IDomEditor, cellInfo: any, targetRowIndex: number) {
     const { cell, path, rowspan, startRow, colIndex } = cellInfo
@@ -341,6 +357,8 @@ class DeleteRow implements IButtonMenu {
   /**
    * 清理删除行后可能产生的空列
    * 检查每一列是否为空，如果是则删除该列
+   *
+   * 注意：这个方法检查单元格是否包含文本内容来决定列是否为空
    */
   private cleanupEmptyColumns(editor: IDomEditor, tablePath: Path, tableNode: any) {
     const rows = tableNode.children as TableRowElement[]
@@ -381,6 +399,7 @@ class DeleteRow implements IButtonMenu {
   /**
    * 删除指定列
    * 如果单元格有 colspan，需要递减 colspan 值
+   * 如果递减后 colspan 为 1，则删除 colSpan 属性
    */
   private removeColumn(editor: IDomEditor, tablePath: Path, columnIndex: number) {
     const [table] = Editor.node(editor, tablePath) as [TableElement, Path]

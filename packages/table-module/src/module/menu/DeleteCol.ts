@@ -1,12 +1,24 @@
 /**
- * @description del col menu
+ * @description 删除表格列菜单
  * @author wangfupeng
  */
 
-import isEqual from 'lodash.isequal'
-import { Editor, Element, Transforms, Range, Node } from 'slate'
+import { Editor, Transforms, Range, Path } from 'slate'
 import { IButtonMenu, IDomEditor, DomEditor, t } from '@wangeditor/core'
 import { DEL_COL_SVG } from '../../constants/svg'
+import { TableCellElement, TableRowElement, TableElement } from '../custom-types'
+import { analyzeTableStructure } from '../helpers'
+
+interface RemoveCellInfo {
+  path: Path
+  rowIndex: number
+  colIndex: number
+}
+
+interface TableInfo {
+  rows: TableRowElement[]
+  maxColumns: number
+}
 
 class DeleteCol implements IButtonMenu {
   readonly title = t('tableModule.deleteCol')
@@ -14,15 +26,17 @@ class DeleteCol implements IButtonMenu {
   readonly tag = 'button'
 
   getValue(editor: IDomEditor): string | boolean {
-    // 无需获取 val
     return ''
   }
 
   isActive(editor: IDomEditor): boolean {
-    // 无需 active
     return false
   }
 
+  /**
+   * 判断菜单是否禁用
+   * 禁用条件：没有选中文本 或 选中了多个节点 或 未选中表格单元格
+   */
   isDisabled(editor: IDomEditor): boolean {
     const { selection } = editor
     if (selection == null) return true
@@ -30,54 +44,175 @@ class DeleteCol implements IButtonMenu {
 
     const cellNode = DomEditor.getSelectedNodeByType(editor, 'table-cell')
     if (cellNode == null) {
-      // 选区未处于 table cell node ，则禁用
       return true
     }
     return false
   }
 
+  /**
+   * 执行删除列操作
+   * 流程：
+   * 1. 获取选中单元格和父表格
+   * 2. 如果表格只有一列，删除整个表格
+   * 3. 否则调用 removeCells 和 removeEmptyRows 删除列和空行
+   */
   exec(editor: IDomEditor, value: string | boolean) {
     if (this.isDisabled(editor)) return
 
+    // 获取选中的表格单元格节点
     const [cellEntry] = Editor.nodes(editor, {
       match: n => DomEditor.checkNodeType(n, 'table-cell'),
       universal: true,
     })
-    const [selectedCellNode, selectedCellPath] = cellEntry
+    const [, selectedCellPath] = cellEntry
 
-    // 如果只有一列，则删除整个表格
-    const rowNode = DomEditor.getParentNode(editor, selectedCellNode)
+    // 获取父行节点
+    const rowNode = DomEditor.getParentNode(editor, cellEntry[0])
     const colLength = rowNode?.children.length || 0
+
+    // 如果表格只有一列，删除整个表格
     if (!rowNode || colLength <= 1) {
-      Transforms.removeNodes(editor, { mode: 'highest' }) // 删除整个表格
+      Transforms.removeNodes(editor, { mode: 'highest' })
       return
     }
 
-    // ------------------------- 不只有 1 列，则继续 -------------------------
-
+    // 获取父表格节点
     const tableNode = DomEditor.getParentNode(editor, rowNode)
     if (tableNode == null) return
 
-    // 遍历所有 rows ，挨个删除 cell
-    const rows = tableNode.children || []
-    rows.forEach(row => {
-      if (!Element.isElement(row)) return
+    // 获取表格路径和虚拟列索引
+    const tablePath = DomEditor.findPath(editor, tableNode)
+    const tableInfo = analyzeTableStructure(tableNode as TableElement)
+    const targetColIndex = this.getVirtualColIndex(editor, selectedCellPath, tablePath, tableInfo)
 
-      const cells = row.children || []
-      // 遍历一个 row 的所有 cells
-      cells.forEach((cell: Node) => {
-        const path = DomEditor.findPath(editor, cell)
-        if (
-          path.length === selectedCellPath.length &&
-          isEqual(path.slice(-1), selectedCellPath.slice(-1)) // 俩数组，最后一位相同
-        ) {
-          // 如果当前 td 的 path 和选中 td 的 path ，最后一位相同，说明是同一列
-          // 删除当前的 cell
-          Transforms.removeNodes(editor, { at: path })
-        }
-      })
+    // 批量执行：先删除列，后清理空行
+    Editor.withoutNormalizing(editor, () => {
+      // 收集要删除的单元格信息
+      const removeCols = this.collectRemoveCells(editor, tablePath, tableInfo, targetColIndex)
+      // 删除单元格
+      this.removeCells(editor, removeCols)
+      // 删除空行（删除列后可能产生空行）
+      this.removeEmptyRows(editor, tablePath, targetColIndex)
     })
   }
-}
 
+  /**
+   * 获取选中单元格的虚拟列索引（考虑 colspan 合并）
+   * 通过 tableInfo 的 allCells 数组查找单元格的真实列位置
+   */
+  private getVirtualColIndex(
+    editor: IDomEditor,
+    selectedCellPath: Path,
+    tablePath: Path,
+    tableInfo: ReturnType<typeof analyzeTableStructure>
+  ): number {
+    const rowIndex = selectedCellPath[tablePath.length]
+    const cellIndex = selectedCellPath[tablePath.length + 1]
+
+    const [table] = Editor.node(editor, tablePath) as [TableElement, Path]
+    const row = table.children[rowIndex] as TableRowElement
+    const selectedCell = row.children[cellIndex] as TableCellElement
+
+    const { allCells } = tableInfo
+    const cellInfo = allCells.find(c => c.cell === selectedCell && c.isPrimary)
+
+    return cellInfo?.colIndex ?? cellIndex
+  }
+
+  /**
+   * 收集要删除的单元格信息
+   * 遍历表格结构，收集目标列所有需要删除的单元格
+   *
+   * 逻辑：
+   * - 如果单元格 colspan = 1，直接删除
+   * - 如果单元格 colspan > 1，递减 colspan
+   */
+  private collectRemoveCells(
+    editor: IDomEditor,
+    tablePath: Path,
+    tableInfo: ReturnType<typeof analyzeTableStructure>,
+    targetColIndex: number
+  ): RemoveCellInfo[] {
+    const { maxRows, structure } = tableInfo
+    const removeCols: RemoveCellInfo[] = []
+    let rowIndex = 0
+    while (rowIndex < maxRows) {
+      const cells = structure[rowIndex]
+      if (cells == null) continue
+      const cell = cells[targetColIndex]
+      const rowSpan = cell?.rowSpan || 1
+      const colSpan = cell?.colSpan || 1
+      const originCell = cell?.originCell
+      const realCell = originCell || cell
+      if (realCell == null) continue
+      const path = DomEditor.findPath(editor, realCell)
+      if (colSpan === 1) {
+        removeCols.push({
+          path: path,
+          rowIndex,
+          colIndex: targetColIndex,
+        })
+      } else {
+        Transforms.setNodes(editor, { colSpan: colSpan - 1 }, { at: path })
+      }
+      rowIndex += rowSpan
+    }
+
+    return removeCols
+  }
+
+  /**
+   * 删除单元格列表
+   * 从后往前遍历，逐个删除单元格
+   * 从后往前删除是为了保持路径有效性
+   */
+  private removeCells(editor: IDomEditor, removeCols: RemoveCellInfo[]) {
+    const sorted = removeCols.reverse()
+    for (const info of sorted) {
+      Transforms.removeNodes(editor, { at: info.path })
+    }
+  }
+
+  /**
+   * 清理删除列后产生的空行
+   * 从行尾到行首遍历，检查每一行是否为空
+   *
+   * 判断空行的逻辑：
+   * - 如果该行所有单元格都被填充（isFilled=true），说明是 rowspan 占位符，该行为空
+   * - 对于空行，先递减占据该行的单元格的 rowSpan，然后删除该行
+   * - 每次删除后重新分析表格结构
+   *
+   * 示例：删除第三列后，剩余的 rowspan 单元格需要调整
+   * Row 1: A1(rowSpan=4) | B1(rowSpan=3)
+   * 删除列后 Row 3 DOM 空，需要对 A1 和 B1 rowSpan - 1
+   */
+  private removeEmptyRows(editor: IDomEditor, tablePath: Path, deletedColIndex: number) {
+    const [table] = Editor.node(editor, tablePath) as [TableElement, Path]
+    let tableInfo = analyzeTableStructure(table)
+    const rows = table.children as TableRowElement[]
+
+    for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex--) {
+      const { structure } = tableInfo
+      const structureRow = structure[rowIndex]
+      if (structureRow == null) continue
+      let isEmpty = structureRow.every(cell => cell?.isFilled)
+      if (!isEmpty) continue
+      const rowPath = [...tablePath, rowIndex]
+      const [row] = Editor.node(editor, rowPath) as [TableRowElement, Path]
+      for (const cell of structureRow) {
+        if (cell == null) continue
+        const rowspan = cell.rowSpan || 1
+        const originCell = cell?.originCell
+        const realCell = originCell || cell
+        if (realCell == null) continue
+        const path = DomEditor.findPath(editor, realCell)
+        Transforms.setNodes(editor, { rowSpan: rowspan - 1 }, { at: path })
+      }
+      Transforms.removeNodes(editor, { at: rowPath })
+      // 重新分析表格结构
+      const [table] = Editor.node(editor, tablePath) as [TableElement, Path]
+      tableInfo = analyzeTableStructure(table)
+    }
+  }
+}
 export default DeleteCol

@@ -1,6 +1,6 @@
 /**
- * @description insert row menu
- * @author wangfupeng
+ * @description 插入表格行菜单
+ * @author dongmj
  */
 
 import { Editor, Transforms, Range, Path } from 'slate'
