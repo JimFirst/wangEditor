@@ -190,7 +190,8 @@ class DeleteCol implements IButtonMenu {
     const [table] = Editor.node(editor, tablePath) as [TableElement, Path]
     let tableInfo = analyzeTableStructure(table)
     const rows = table.children as TableRowElement[]
-
+    let removeRowsPath: Path[] = []
+    const rowSpanMap = new Map()
     for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex--) {
       const { structure } = tableInfo
       const structureRow = structure[rowIndex]
@@ -199,19 +200,33 @@ class DeleteCol implements IButtonMenu {
       if (!isEmpty) continue
       const rowPath = [...tablePath, rowIndex]
       const [row] = Editor.node(editor, rowPath) as [TableRowElement, Path]
+      const map = new Map()
       for (const cell of structureRow) {
         if (cell == null) continue
-        const rowspan = cell.rowSpan || 1
         const originCell = cell?.originCell
         const realCell = originCell || cell
+        const rowspan = realCell.rowSpan || 1
         if (realCell == null) continue
+        if (map.has(realCell)) continue
+        map.set(realCell, 1)
+        if (rowSpanMap.has(realCell)) {
+          const rowSpan = rowSpanMap.get(realCell)
+          rowSpanMap.set(realCell, rowSpan + 1)
+        } else {
+          rowSpanMap.set(realCell, 1)
+        }
         const path = DomEditor.findPath(editor, realCell)
-        Transforms.setNodes(editor, { rowSpan: rowspan - 1 }, { at: path })
+        Transforms.setNodes(editor, { rowSpan: rowspan - rowSpanMap.get(realCell) }, { at: path })
       }
-      Transforms.removeNodes(editor, { at: rowPath })
+      removeRowsPath.push(rowPath)
+      // Transforms.removeNodes(editor, { at: rowPath })
       // 重新分析表格结构
-      const [table] = Editor.node(editor, tablePath) as [TableElement, Path]
-      tableInfo = analyzeTableStructure(table)
+      // const [table] = Editor.node(editor, tablePath) as [TableElement, Path]
+      // tableInfo = analyzeTableStructure(table)
+    }
+    // 删除空行
+    for (const path of removeRowsPath) {
+      Transforms.removeNodes(editor, { at: path })
     }
   }
 }
